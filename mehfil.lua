@@ -25,7 +25,7 @@ Mouse:GetPropertyChangedSignal("Icon"):Connect(function()
     if Mouse.Icon ~= CUSTOM_CURSOR_ID then Mouse.Icon = CUSTOM_CURSOR_ID end
 end)
 
--- ===== GLOBAL ROBUST REQUIRE =====
+-- ===== GLOBAL ROBUST REQUIRE (needed by skin changer) =====
 function robust_require(module)
     local mName = tostring(module)
     local setidentity = setthreadidentity or set_thread_identity or (syn and syn.set_thread_identity) or (fluxus and fluxus.set_thread_identity) or (getgenv and getgenv().set_thread_identity)
@@ -128,6 +128,7 @@ task.spawn(loadExternalLuaFiles)
 local function loadFileConfigs()
     if not isfolder or not listfiles or not readfile then return end
     if not isfolder("Mehfil Lua/configs") then return end
+    shared.SavedConfigs_Config2 = {}  -- clear old data
     local ok, files = pcall(listfiles, "Mehfil Lua/configs")
     if not ok then return end
     for _, file in ipairs(files) do
@@ -463,7 +464,7 @@ for i, data in ipairs(menuData) do
     end
 end
 
--- ===== ADMIN PANEL =====
+-- ===== ADMIN PANEL (unchanged) =====
 local adminMenu, adminContentFrame
 local function createAdminPanel()
     if adminMenu then return end
@@ -547,7 +548,7 @@ function hideAdminPanel()
     t.Completed:Connect(function() adminMenu.Visible = false end)
 end
 
--- ===== SETTINGS TAB (with JSON paste and refresh) =====
+-- ===== SETTINGS TAB (with working Refresh, JSON paste) =====
 do
     local settingsMenu = menuInfos[3]
     local scrollFrame = settingsMenu.scroll
@@ -596,18 +597,19 @@ do
     deleteBtn.Parent = scrollFrame; addCorners(deleteBtn, UDim.new(0,4))
     registerElement(deleteBtn, "elem"); registerElement(deleteBtn, "text")
 
-    -- Refresh button
+    -- Refresh button (NOW RELOADS FROM DISK)
     local refreshBtn = Instance.new("TextButton")
     refreshBtn.Size = UDim2.new(1, -4, 0, 20); refreshBtn.BackgroundColor3 = currentTheme.elem; refreshBtn.TextColor3 = currentTheme.text
     refreshBtn.Font = currentFont; refreshBtn.Text = "Refresh Configs"; refreshBtn.TextSize = 11; refreshBtn.AutoButtonColor = false
     refreshBtn.Parent = scrollFrame; addCorners(refreshBtn, UDim.new(0,4))
     registerElement(refreshBtn, "elem"); registerElement(refreshBtn, "text")
     refreshBtn.MouseButton1Click:Connect(function()
-        refreshConfigsDropdown()
-        Notify("Configs refreshed")
+        loadFileConfigs()                -- re-read from disk
+        refreshConfigsDropdown()          -- rebuild UI
+        Notify("Configs reloaded from disk")
     end)
 
-    -- JSON paste area
+    -- JSON paste area (unchanged)
     local jsonNameBox = Instance.new("TextBox")
     jsonNameBox.Size = UDim2.new(1, -4, 0, 22); jsonNameBox.BackgroundColor3 = currentTheme.elem; jsonNameBox.TextColor3 = currentTheme.text
     jsonNameBox.Font = currentFont; jsonNameBox.PlaceholderText = "Config name (paste JSON)"; jsonNameBox.Text = ""; jsonNameBox.ClearTextOnFocus = false
@@ -643,14 +645,14 @@ do
         Notify("Config '" .. name .. "' saved from JSON")
     end)
 
+    -- Rest of settings unchanged (selectedConfig, getCurrentSettings, applySettings, saveConfigToFile, saveAutoLoad, refreshConfigsDropdown, etc.)
+    -- ... (keeping the same as previous version to save space, they are identical)
     local selectedConfig = nil
     local deleteConfirm, deleteTimerThread = false, nil
-
     local function resetDeleteButtonState()
         if deleteTimerThread then task.cancel(deleteTimerThread); deleteTimerThread = nil end
         deleteConfirm = false; deleteBtn.Text = "Delete Config"
     end
-
     local function getCurrentSettings()
         return {
             theme = currentThemeName,
@@ -660,7 +662,6 @@ do
             hideButton = hideButtonToggle.state,
         }
     end
-
     local function applySettings(settings)
         if not settings then return end
         if settings.theme and themes[settings.theme] then applyTheme(settings.theme) end
@@ -669,7 +670,6 @@ do
         if settings.hideStats ~= nil and hideStatsToggle.SetState then hideStatsToggle.SetState(settings.hideStats) end
         if settings.hideButton ~= nil and hideButtonToggle.SetState then hideButtonToggle.SetState(settings.hideButton) end
     end
-
     local function saveConfigToFile(name, settings)
         shared.SavedConfigs_Config2[name] = settings
         if writefile and makefolder and isfolder then
@@ -677,12 +677,10 @@ do
             pcall(writefile, "Mehfil Lua/configs/" .. name .. ".json", HttpService:JSONEncode(settings))
         end
     end
-
     local function saveAutoLoad(name)
         shared.AutoLoadConfig_Config2 = name
         if writefile then pcall(writefile, "Mehfil Lua/autoload.txt", name) end
     end
-
     local function refreshConfigsDropdown()
         for _, child in ipairs(configsDropdownContent:GetChildren()) do
             if child:IsA("TextButton") or child:IsA("TextLabel") then child:Destroy() end
@@ -719,7 +717,6 @@ do
         end
         if updateAutoLoadDropdownHeight then updateAutoLoadDropdownHeight() end
     end
-
     configsDropdownHeader.MouseButton1Click:Connect(function()
         configsOpen = not configsOpen
         refreshConfigsDropdown()
@@ -733,7 +730,6 @@ do
             TweenService:Create(configsDropdownContent, TweenInfo.new(0.3), {Size = UDim2.new(1, -4, 0, 0)}):Play()
         end
     end)
-
     createBtn.MouseButton1Click:Connect(function()
         local name = cfgNameBox.Text:gsub("^%s+", ""):gsub("%s+$", "")
         if name == "" then Notify("Enter a config name") return end
@@ -743,26 +739,22 @@ do
         cfgNameBox.Text = ""
         refreshConfigsDropdown()
     end)
-
     local function runLoadLogic(name)
         local settings = shared.SavedConfigs_Config2[name]
         if not settings then Notify("Config not found") return end
         applySettings(settings)
     end
-
     loadBtn.MouseButton1Click:Connect(function()
         if not selectedConfig then return end
         runLoadLogic(selectedConfig)
         Notify("Config '" .. selectedConfig .. "' loaded")
     end)
-
     overwriteBtn.MouseButton1Click:Connect(function()
         if not selectedConfig then return end
         local settings = getCurrentSettings()
         saveConfigToFile(selectedConfig, settings)
         Notify("Config '" .. selectedConfig .. "' overwritten")
     end)
-
     deleteBtn.MouseButton1Click:Connect(function()
         if not selectedConfig then return end
         if not deleteConfirm then
@@ -790,7 +782,7 @@ do
             refreshConfigsDropdown()
         end
     end)
-
+    -- theme/font headers, hide toggles, auto-load, admin button (unchanged)
     local themeHeader = Instance.new("TextButton")
     themeHeader.Size = UDim2.new(1, -4, 0, 22); themeHeader.BackgroundColor3 = currentTheme.elem; themeHeader.TextColor3 = currentTheme.text
     themeHeader.Font = currentFont; themeHeader.TextSize = 12; themeHeader.Text = "▼ Theme: " .. currentThemeName
@@ -1014,7 +1006,7 @@ do
 end
 
 -- ======================================================================
--- VOID SPAM & ORBIT BACKEND (unchanged)
+-- VOID SPAM & ORBIT BACKEND (with target lock camera)
 -- ======================================================================
 local voidSpamEnabled = false
 local currentTarget = nil
@@ -1029,6 +1021,7 @@ local cameraLockConnection = nil
 local camPitch = 0
 local camYaw = 0
 local camPos = Vector3.new()
+local targetCameraConnection = nil
 
 local voidConfig = {
     voidDepth = 150,
@@ -1166,6 +1159,10 @@ local function onCharacterAdded(character)
         setupHealthListener()
     end
     if spinConstraint then spinConstraint:Destroy(); spinConstraint = nil end
+    if targetCameraConnection then
+        targetCameraConnection:Disconnect()
+        targetCameraConnection = nil
+    end
     if spawnCamLocked then
         unlockCamera()
         task.wait(0.1)
@@ -1330,8 +1327,63 @@ local function onOrbitToggle(enabled)
     end
 end
 
+-- NEW CAMERA SYSTEM: Lock to target when void spam is active
+local function lockCameraToTarget()
+    if targetCameraConnection then targetCameraConnection:Disconnect() end
+    if not currentTarget or not currentTarget.Character or not currentTarget.Character:FindFirstChild("Head") then return end
+    local camera = Workspace.CurrentCamera
+    if not camera then return end
+    camera.CameraType = Enum.CameraType.Scriptable
+    UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+    local targetHead = currentTarget.Character.Head
+    local dist = 15  -- distance behind target
+    local keys = {}
+    local inputBeganCon = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        keys[input.KeyCode] = true
+    end)
+    local inputEndedCon = UserInputService.InputEnded:Connect(function(input)
+        keys[input.KeyCode] = nil
+    end)
+
+    targetCameraConnection = RunService.RenderStepped:Connect(function()
+        if not voidSpamEnabled or not currentTarget or not currentTarget.Character or not currentTarget.Character:FindFirstChild("Head") then
+            targetCameraConnection:Disconnect()
+            targetCameraConnection = nil
+            unlockCamera()
+            return
+        end
+        local head = currentTarget.Character.Head
+        local delta = UserInputService:GetMouseDelta()
+        camPitch = math.clamp(camPitch - delta.Y * 0.003, -math.pi/2, math.pi/2)
+        camYaw = camYaw - delta.X * 0.003
+
+        local rotYaw = CFrame.Angles(0, camYaw, 0)
+        local rotPitch = CFrame.Angles(camPitch, 0, 0)
+        local rotCFrame = rotYaw * rotPitch
+
+        local moveDir = Vector3.new()
+        if keys[Enum.KeyCode.W] or keys[Enum.KeyCode.Up] then moveDir = moveDir + rotCFrame.LookVector end
+        if keys[Enum.KeyCode.S] or keys[Enum.KeyCode.Down] then moveDir = moveDir - rotCFrame.LookVector end
+        if keys[Enum.KeyCode.A] or keys[Enum.KeyCode.Left] then moveDir = moveDir - rotCFrame.RightVector end
+        if keys[Enum.KeyCode.D] or keys[Enum.KeyCode.Right] then moveDir = moveDir + rotCFrame.RightVector end
+        if keys[Enum.KeyCode.Space] then moveDir = moveDir + Vector3.new(0,1,0) end
+        if keys[Enum.KeyCode.LeftShift] or keys[Enum.KeyCode.RightShift] then moveDir = moveDir - Vector3.new(0,1,0) end
+        if moveDir.Magnitude > 0 then
+            moveDir = moveDir.Unit * 50 * game:GetService("RunService").RenderStepped:Wait()
+            camPos = camPos + moveDir
+        end
+
+        camera.CFrame = CFrame.lookAt(camPos, head.Position)
+    end)
+end
+
 local function lockCameraAtSpawn()
     if spawnCamLocked then return end
+    if currentTarget then
+        lockCameraToTarget()   -- use target lock if we have a target
+        return
+    end
     local camera = Workspace.CurrentCamera
     if not camera then return end
     spawnCamCFrame = camera.CFrame
@@ -1396,18 +1448,23 @@ local function lockCameraAtSpawn()
 end
 
 local function unlockCamera()
-    if not spawnCamLocked then return end
-    spawnCamLocked = false
-    if cameraLockConnection then
-        cameraLockConnection:Disconnect()
-        cameraLockConnection = nil
+    if targetCameraConnection then
+        targetCameraConnection:Disconnect()
+        targetCameraConnection = nil
     end
-    local camera = Workspace.CurrentCamera
-    if camera then
-        camera.CameraType = Enum.CameraType.Custom
-        camera.CameraSubject = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+    if spawnCamLocked then
+        spawnCamLocked = false
+        if cameraLockConnection then
+            cameraLockConnection:Disconnect()
+            cameraLockConnection = nil
+        end
+        local camera = Workspace.CurrentCamera
+        if camera then
+            camera.CameraType = Enum.CameraType.Custom
+            camera.CameraSubject = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+        end
+        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
     end
-    UserInputService.MouseBehavior = Enum.MouseBehavior.Default
 end
 
 local loopThread = nil
@@ -1425,6 +1482,11 @@ local function voidSpamLoop()
         end
         local root = target.Character:FindFirstChild("HumanoidRootPart")
         if not root then task.wait(0.1) continue end
+
+        -- Lock camera to target when we have a valid target
+        if not targetCameraConnection then
+            lockCameraToTarget()
+        end
 
         currentCycleState = "In Void"
         local voidY = root.Position.Y - voidConfig.voidDepth
@@ -1469,6 +1531,10 @@ local function voidSpamLoop()
     end
     stopSpin()
     stopAimbot()
+    if targetCameraConnection then
+        targetCameraConnection:Disconnect()
+        targetCameraConnection = nil
+    end
     unlockCamera()
     currentCycleState = "Idle"
     currentTarget = nil
@@ -1477,7 +1543,7 @@ end
 local function startVoidSpam()
     if voidSpamEnabled then return end
     voidSpamEnabled = true
-    lockCameraAtSpawn()
+    lockCameraAtSpawn()   -- will now automatically lock to target if available
     setupHealthListener()
     loopThread = task.spawn(voidSpamLoop)
     if orbitEnabled then stopStandaloneOrbit() end
@@ -1871,7 +1937,7 @@ else
 end
 
 -- ======================================================================
--- SKIN CHANGER (themed, smaller, with wraps, fixed skin display)
+-- SKIN CHANGER (unchanged from previous improved version)
 -- ======================================================================
 local function closeSkinChanger()
     local gui = CoreGui:FindFirstChild("MehfilSkinChanger")
@@ -2702,7 +2768,7 @@ local function setupVoidSpamUI()
 end
 setupVoidSpamUI()
 
--- ===== BUILD ORBIT UI =====
+-- ===== BUILD ORBIT UI (unchanged) =====
 local function setupOrbitUI()
     local orbitMenu = nil
     for _, info in ipairs(menuInfos) do if info.name == "Orbit" then orbitMenu = info.frame; break end end
