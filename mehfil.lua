@@ -1,7 +1,11 @@
--- ==============================================
--- MEHFIL LUA – FULL CHEAT SCRIPT
--- No key, no webhook, no game lock
--- ==============================================
+-- ===== GAME ID LOCK =====
+local ALLOWED_GAME = 17625359962
+if game.PlaceId ~= ALLOWED_GAME then
+    game:GetService("Players").LocalPlayer:Kick("This game is not supported")
+    return
+end
+
+-- ===== FULL CHEAT SCRIPT =====
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Lighting = game:GetService("Lighting")
@@ -20,6 +24,54 @@ Mouse.Icon = CUSTOM_CURSOR_ID
 Mouse:GetPropertyChangedSignal("Icon"):Connect(function()
     if Mouse.Icon ~= CUSTOM_CURSOR_ID then Mouse.Icon = CUSTOM_CURSOR_ID end
 end)
+
+-- ===== GLOBAL ROBUST REQUIRE =====
+function robust_require(module)
+    local mName = tostring(module)
+    local setidentity = setthreadidentity or set_thread_identity or (syn and syn.set_thread_identity) or (fluxus and fluxus.set_thread_identity) or (getgenv and getgenv().set_thread_identity)
+    local getidentity = getthreadidentity or get_thread_identity or (syn and syn.get_thread_identity) or (fluxus and fluxus.set_thread_identity) or (getgenv and getgenv().get_thread_identity)
+    
+    if shared[mName] or _G[mName] then return (shared[mName] or _G[mName]) end
+    if getrenv and (getrenv()._G[mName] or getrenv().shared[mName]) then return (getrenv()._G[mName] or getrenv().shared[mName]) end
+
+    local old_identity
+    pcall(function() if getidentity and setidentity then old_identity = getidentity() setidentity(2) end end)
+    local success, result = pcall(require, module)
+    if not success and getgenv and getgenv().require then
+        local ok, res = pcall(getgenv().require, module)
+        if ok then success, result = true, res end
+    end
+    pcall(function() if setidentity and old_identity then setidentity(old_identity) end end)
+    if success then return result end
+
+    local getupvalues = debug.getupvalues or getupvalues
+    local scan_apis = {getgc, getregistry, debug.getregistry}
+    for _, api in pairs(scan_apis) do
+        if type(api) == "function" then
+            local ok, objects = pcall(api, true)
+            if ok and type(objects) == "table" then
+                for _, v in pairs(objects) do
+                    if type(v) == "table" then
+                        if mName:find("CosmeticLibrary") and (v.Cosmetics or rawget(v, "Cosmetics")) and (type(v.Equip) == "function" or type(v.GetSkins) == "function") then return v
+                        elseif mName:find("ItemLibrary") and (v.ViewModels or rawget(v, "ViewModels")) then return v
+                        elseif mName:find("ClientViewModel") and (v.new or rawget(v, "new")) and (v.GetWrap or rawget(v, "GetWrap")) then return v
+                        elseif mName:find("ReplicatedClass") and type(v.ToEnum) == "function" then return v
+                        end
+                    elseif type(v) == "function" and getupvalues then
+                        local ups = getupvalues(v)
+                        for _, upv in pairs(ups) do
+                            if type(upv) == "table" then
+                                if mName:find("CosmeticLibrary") and upv.Cosmetics and upv.Equip then return upv end
+                                if mName:find("ItemLibrary") and upv.ViewModels then return upv end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
 
 local Blur = Instance.new("BlurEffect")
 Blur.Name = "GameBackgroundBlur"
@@ -40,15 +92,16 @@ local updateAutoLoadDropdownHeight
 shared.SavedConfigs_Config2 = shared.SavedConfigs_Config2 or {}
 shared.AutoLoadConfig_Config2 = shared.AutoLoadConfig_Config2 or "None"
 
+-- Folder "Mehfil Lua"
 if writefile and makefolder and isfolder then
-    if not isfolder("Configuration2") then pcall(makefolder, "Configuration2") end
-    if not isfolder("Configuration2/configs") then pcall(makefolder, "Configuration2/configs") end
+    if not isfolder("Mehfil Lua") then pcall(makefolder, "Mehfil Lua") end
+    if not isfolder("Mehfil Lua/configs") then pcall(makefolder, "Mehfil Lua/configs") end
 end
 
 local function loadFileConfigs()
     if not isfolder or not listfiles or not readfile then return end
-    if not isfolder("Configuration2/configs") then return end
-    local ok, files = pcall(listfiles, "Configuration2/configs")
+    if not isfolder("Mehfil Lua/configs") then return end
+    local ok, files = pcall(listfiles, "Mehfil Lua/configs")
     if not ok then return end
     for _, file in ipairs(files) do
         if file:match("%.json$") then
@@ -68,7 +121,7 @@ end
 loadFileConfigs()
 
 if readfile and isfile then
-    local autoLoadPath = "Configuration2/autoload.txt"
+    local autoLoadPath = "Mehfil Lua/autoload.txt"
     local ok2, autoLoadData = pcall(function()
         if isfile(autoLoadPath) then return readfile(autoLoadPath) end
         return nil
@@ -335,8 +388,8 @@ for i, data in ipairs(menuData) do
 
     if data.name == "Void spam" then
         local rightContainer = Instance.new("Frame")
-        rightContainer.Size = UDim2.new(0, 56, 1, 0)
-        rightContainer.Position = UDim2.new(1, -60, 0, 0)
+        rightContainer.Size = UDim2.new(0, 82, 1, 0)
+        rightContainer.Position = UDim2.new(1, -86, 0, 0)
         rightContainer.BackgroundTransparency = 1
         rightContainer.Parent = titleBar
 
@@ -364,7 +417,8 @@ for i, data in ipairs(menuData) do
         end
 
         local miscBtn = createIconButtonBox(115458898390425, "MiscBtn", 0)
-        local espBtn = createIconButtonBox(126382982896675, "EspBtn", 30)
+        local espBtn = createIconButtonBox(126382982896675, "EspBtn", 28)
+        local visualBtn = createIconButtonBox(137966982354455, "VisualBtn", 56)
     end
 
     if data.name == "Settings" then
@@ -545,14 +599,14 @@ do
     local function saveConfigToFile(name, settings)
         shared.SavedConfigs_Config2[name] = settings
         if writefile and makefolder and isfolder then
-            if not isfolder("Configuration2/configs") then pcall(makefolder, "Configuration2/configs") end
-            pcall(writefile, "Configuration2/configs/" .. name .. ".json", HttpService:JSONEncode(settings))
+            if not isfolder("Mehfil Lua/configs") then pcall(makefolder, "Mehfil Lua/configs") end
+            pcall(writefile, "Mehfil Lua/configs/" .. name .. ".json", HttpService:JSONEncode(settings))
         end
     end
 
     local function saveAutoLoad(name)
         shared.AutoLoadConfig_Config2 = name
-        if writefile then pcall(writefile, "Configuration2/autoload.txt", name) end
+        if writefile then pcall(writefile, "Mehfil Lua/autoload.txt", name) end
     end
 
     local function refreshConfigsDropdown()
@@ -651,7 +705,7 @@ do
             shared.SavedConfigs_Config2[selectedConfig] = nil
             if shared.AutoLoadConfig_Config2 == selectedConfig then saveAutoLoad("None") end
             if isfile and delfile then
-                local path = "Configuration2/configs/" .. selectedConfig .. ".json"
+                local path = "Mehfil Lua/configs/" .. selectedConfig .. ".json"
                 if pcall(isfile, path) then pcall(delfile, path) end
             end
             Notify("Config '" .. selectedConfig .. "' deleted")
@@ -886,7 +940,7 @@ do
 end
 
 -- ======================================================================
--- VOID SPAM & ORBIT BACKEND
+-- VOID SPAM & ORBIT BACKEND (unchanged)
 -- ======================================================================
 local voidSpamEnabled = false
 local currentTarget = nil
@@ -1470,7 +1524,7 @@ local function createModernSlider(parent, name, min, max, default, callback)
 end
 
 -- ======================================================================
--- ESP BACKEND (with fill transparency & outline thickness)
+-- ESP BACKEND (unchanged)
 -- ======================================================================
 if Drawing then
     ESP = {
@@ -1743,7 +1797,407 @@ else
 end
 
 -- ======================================================================
--- BUILD VOID SPAM UI (FINAL FIX: completely clear & rebuild)
+-- SKIN CHANGER (themed, smaller, fixed skin display)
+-- ======================================================================
+local function closeSkinChanger()
+    local gui = CoreGui:FindFirstChild("MehfilSkinChanger")
+    if gui and gui.MainFrame then
+        local tween = TweenService:Create(gui.MainFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {BackgroundTransparency = 1})
+        tween:Play()
+        tween.Completed:Connect(function()
+            gui.MainFrame.Visible = false
+            gui.MainFrame.BackgroundTransparency = 0
+        end)
+    end
+end
+
+local function openSkinChanger()
+    local existing = CoreGui:FindFirstChild("MehfilSkinChanger")
+    if existing then
+        if existing.MainFrame then
+            if existing.MainFrame.Visible then
+                closeSkinChanger()
+            else
+                existing.MainFrame.Visible = true
+                existing.MainFrame.BackgroundTransparency = 0
+                TweenService:Create(existing.MainFrame, TweenInfo.new(0.2), {BackgroundTransparency = 0}):Play()
+            end
+        end
+        return
+    end
+
+    task.spawn(function()
+        local ReplicatedStorage = game:GetService("ReplicatedStorage")
+        local player = Players.LocalPlayer
+
+        local Modules = player.PlayerScripts:WaitForChild("Modules", 15)
+        local CosmeticLibrary = robust_require(ReplicatedStorage:WaitForChild("Modules", 20):WaitForChild("CosmeticLibrary", 20))
+        local ItemLibrary = robust_require(ReplicatedStorage.Modules:WaitForChild("ItemLibrary", 20))
+        local ReplicatedClass = robust_require(ReplicatedStorage.Modules:WaitForChild("ReplicatedClass", 20))
+        local ClientItem = robust_require(Modules:WaitForChild("ClientReplicatedClasses", 15):WaitForChild("ClientFighter", 15):WaitForChild("ClientItem", 15))
+        local ClientViewModel = robust_require(Modules.ClientReplicatedClasses.ClientFighter.ClientItem:WaitForChild("ClientViewModel", 15))
+
+        if not CosmeticLibrary or not ItemLibrary or not ClientViewModel or not ReplicatedClass then
+            Notify("Skin Changer modules not found")
+            return
+        end
+
+        local SkinLists = {
+            ["Assault Rifle"] = {"Default", "AK-47", "AUG", "Tommy Gun", "Boneclaw Rifle", "Gingerbread AUG", "AKEY-47", "100K Visits", "10 Billion Visits", "Phoenix Rifle"},
+            ["Bow"] = {"Default", "Compound Bow", "Raven Bow", "Dream Bow", "Bat Bow", "Frostbite Bow", "Beloved Bow", "Balloon Bow", "Glorious Bow", "Key Bow", "Arch Bow"},
+            ["Burst Rifle"] = {"Default", "Electro Burst", "Aqua Burst", "FAMAS", "Spectral Burst", "Pine Burst"},
+            ["Crossbow"] = {"Default", "Pixel Crossbow", "Harpoon Crossbow", "Violin Crossbow", "Crossbone", "Frostbite Crossbow", "Arch Crossbow", "Glorious Crossbow"},
+            ["Distortion"] = {"Default", "Plasma Distortion", "Magma Distortion", "Cyber Distortion", "Expirement D15", "Sleighstortion"},
+            ["Energy Rifle"] = {"Default", "Hacker Rifle", "Hydro Rifle", "Void Rifle", "Soul Rifle", "New Years Energy Rifle"},
+            ["Flamethrower"] = {"Default", "Pixel Flamethrower", "Lamethrower", "Glitterthrower", "Jack O' Thrower", "Snowblower", "Keythrower", "Rainbowthrower"},
+            ["Grenade Launcher"] = {"Default", "Swashbuckler", "Uranium Launcher", "Gearnade Launcher", "Skull Grenade Launcher", "Snowball Launcher"},
+            ["Gunblade"] = {"Default", "Hyper Gunblade", "Crude Gunblade", "Gunsaw", "Boneblade", "Elf's Gunblade"},
+            ["Minigun"] = {"Default", "Lasergun 3000", "Pixel Minigun", "Fighter Jet", "Pumpkin Minigun", "Wrapped Minigun"},
+            ["Paintball Gun"] = {"Default", "Slime Gun", "Boba Gun", "Ketchup Gun", "Brain Gun", "Snowball Gun"},
+            ["RPG"] = {"Default", "Nuke Launcher", "Spaceship Launcher", "Squid Launcher", "Pumpkin Launcher", "Firework Launcher"},
+            ["Shotgun"] = {"Default", "Balloon Shotgun", "Hyper Shotgun", "Cactus Shotgun", "Broomstick", "Wrapped Shotgun"},
+            ["Sniper"] = {"Default", "Pixel Sniper", "Hyper Sniper", "Event Horizon", "Eyething Sniper", "Gingerbread Sniper", "Keyper", "Glorious Sniper"},
+            ["Daggers"] = {"Default", "Aces", "Paper Planes", "Shurikens", "Bat Daggers", "Cookies", "Crystal Daggers", "Keynais"},
+            ["Energy Pistols"] = {"Default", "Void Pistols", "Hydro Pistols", "Soul Pistols", "New Years Energy Pistols"},
+            ["Exogun"] = {"Default", "Singularity", "Raygun", "Repulsor", "Exogourd", "Midnight Festive Exogun"},
+            ["Flare Gun"] = {"Default", "Firework Gun", "Dynamite Gun", "Banana Flare", "Vexed Flare Gun", "Wrapped Flare Gun"},
+            ["Handgun"] = {"Default", "Blaster", "Hand Gun", "Gumball Handgun", "Pumpkin Handgun", "Gingerbread Handgun"},
+            ["Revolver"] = {"Default", "Desert Eagle", "Sheriff", "Peppergun", "Boneclaw Revolver", "Peppermint Sheriff"},
+            ["Shorty"] = {"Default", "Not So Shorty", "Lovely Shorty", "Balloon Shorty", "Demon Shorty", "Wrapped Shorty"},
+            ["Slingshot"] = {"Default", "Stick", "Goal Post", "Harp", "Boneshot", "Reindeer Slingshot", "Lucky Horseshoe"},
+            ["Spray"] = {"Default", "Lovely Spray", "Nail Gun", "Bottle Spray", "Boneclaw Spray", "Pine Spray", "Key Spray"},
+            ["Uzi"] = {"Default", "Water Uzi", "Electro Uzi", "Money Gun", "Demon Uzi", "Pine Uzi"},
+            ["Warper"] = {"Default", "Glitter Warper", "Arcane Warper", "Hotel Bell", "Experiment W4", "Frost Warper"},
+            ["Battle Axe"] = {"Default", "The Shred", "Ban Axe", "Cerulean Axe", "Mimic Axe", "Nordic Axe"},
+            ["Chainsaw"] = {"Default", "Blobsaw", "Handsaws", "Mega Drill", "Buzzsaw", "Festive Buzzsaw"},
+            ["Fists"] = {"Default", "Boxing Gloves", "Brass Knuckles", "Fists Of Hurt", "Pumpkin Claws", "Festive Fists"},
+            ["Katana"] = {"Default", "Saber", "Lightning Bolt", "Stellar Katana", "Evil Trident", "New Years Katana", "Keytana", "Arch Katana", "Crystal Katana", "Pixel Katana", "Glorious Katana"},
+            ["Knife"] = {"Default", "Chancla", "Karambit", "Balisong", "Machete", "Candy Cane", "Keylisong", "Keyrambit", "Caladbolg"},
+            ["Riot Shield"] = {"Default", "Door", "Energy Shield", "Masterpiece", "Tombstone Shield", "Sled"},
+            ["Scythe"] = {"Default", "Scythe of Death", "Anchor", "Sakura Scythe", "Bat Scythe", "Cryo Scythe", "Crystal Scythe", "Keythe", "Bug Net", "Arch Scythe"},
+            ["Trowel"] = {"Default", "Plastic Shovel", "Garden Shovel", "Paintbrush", "Pumpkin Carver", "Snow Shovel"},
+            ["Flashbang"] = {"Default", "Disco Ball", "Camera", "Lightbulb", "Skullbang", "Shining Star"},
+            ["Freeze Ray"] = {"Default", "Temporal Ray", "Bubble Ray", "Gum Ray", "Spider Ray", "Wrapped Freeze Ray"},
+            ["Grenade"] = {"Default", "Whoopee Cushion", "Water Balloon", "Dynamite", "Soul Grenade", "Jingle Grenade"},
+            ["Jump Pad"] = {"Default", "Trampoline", "Bounce House", "Shady Chicken Sandwich", "Spider Web", "Jolly Man"},
+            ["Medkit"] = {"Default", "Sandwich", "Laptop", "Medkitty", "Bucket of Candy", "Milk & Cookies", "Box of Chocolates", "Briefcase"},
+            ["Molotov"] = {"Default", "Coffee", "Torch", "Lava Lamp", "Vexed Candle", "Hot Coals", "Arch Molotov"},
+            ["Satchel"] = {"Default", "Advanced Satchel", "Notebook Satchel", "Bag O' Money", "Potion Satchel", "Suspicious Gift"},
+            ["Smoke Grenade"] = {"Default", "Emoji Cloud", "Balance", "Hourglass", "Eyeball", "Snowglobe"},
+            ["Subspace Tripmine"] = {"Default", "Don't Press", "Spring", "DIY Tripmine", "Trick or Treat", "Dev In the Box", "Pot O Keys"},
+            ["War Horn"] = {"Default", "Trumpet", "Megaphone", "Air Horn", "Boneclaw Horn", "Mammoth Horn"},
+            ["Warpstone"] = {"Default", "Cyber Warpstone", "Teleport Disc", "Electropunk Warpstone", "Warpbone", "Warpstar"},
+            ["Permafrost"] = {"Default", "Snowman Permafrost", "Ice Permafrost", "Glorious Permafrost"},
+        }
+        local SaveFile = "AnihaSkinConfig.json"
+        _G.EquippedData = _G.EquippedData or {}
+        for weapon in pairs(SkinLists) do
+            if not _G.EquippedData[weapon] then
+                _G.EquippedData[weapon] = {Skin = "Default", Wrap = "None"}
+            end
+        end
+        local function SaveConfig()
+            local data = {}
+            for weapon, info in pairs(_G.EquippedData) do
+                data[weapon] = {Skin = info.Skin or "Default", Wrap = info.Wrap or "None"}
+            end
+            if writefile then pcall(writefile, SaveFile, HttpService:JSONEncode(data)) end
+        end
+        local function LoadConfig()
+            if not isfile then return end
+            local success, result = pcall(function()
+                if isfile(SaveFile) then
+                    local raw = readfile(SaveFile)
+                    return HttpService:JSONDecode(raw)
+                end
+                return nil
+            end)
+            if success and result then
+                for weapon, info in pairs(result) do
+                    if _G.EquippedData[weapon] then
+                        _G.EquippedData[weapon].Skin = info.Skin or "Default"
+                        _G.EquippedData[weapon].Wrap = info.Wrap or "None"
+                    end
+                end
+            end
+        end
+        pcall(LoadConfig)
+
+        local function getCosmeticData(name, cType)
+            local base = CosmeticLibrary.Cosmetics[name]
+            if not base then return nil end
+            local data = table.clone(base)
+            data.Name = name
+            data.Type = cType
+            return data
+        end
+
+        local oldGetWrap = ClientViewModel.GetWrap
+        ClientViewModel.GetWrap = function(self)
+            local ok, result = pcall(function()
+                local weaponName = self.ClientItem and self.ClientItem.Name
+                if weaponName and _G.EquippedData[weaponName] then
+                    local wrapName = _G.EquippedData[weaponName].Wrap
+                    if wrapName and wrapName ~= "None" then
+                        return getCosmeticData(wrapName, "Wrap")
+                    end
+                end
+            end)
+            if ok and result then return result end
+            return oldGetWrap(self)
+        end
+
+        local oldNew = ClientViewModel.new
+        ClientViewModel.new = function(replicatedData, clientItem)
+            pcall(function()
+                if not clientItem then return end
+                local weaponName = clientItem.Name
+                if not weaponName then return end
+                if not _G.EquippedData[weaponName] then return end
+
+                local cf = rawget(clientItem, "ClientFighter")
+                    or (pcall(function() return clientItem.ClientFighter end) and clientItem.ClientFighter)
+                if not cf or cf.Player ~= player then return end
+
+                local selectedSkin = _G.EquippedData[weaponName].Skin
+                if not selectedSkin or selectedSkin == "Default" then return end
+
+                local cosData = getCosmeticData(selectedSkin, "Skin")
+                if not cosData then return end
+
+                local dataKey = ReplicatedClass:ToEnum("Data")
+                local skinKey = ReplicatedClass:ToEnum("Skin")
+                local nameKey = ReplicatedClass:ToEnum("Name")
+                replicatedData[dataKey] = replicatedData[dataKey] or {}
+                replicatedData[dataKey][skinKey] = cosData
+                replicatedData[dataKey][nameKey] = selectedSkin
+            end)
+
+            local vm = oldNew(replicatedData, clientItem)
+            task.delay(0.1, function()
+                pcall(function() if vm and vm._UpdateWrap then vm:_UpdateWrap() end end)
+            end)
+            return vm
+        end
+
+        -- Build themed UI (smaller, styled like main menu)
+        local ScreenGui = Instance.new("ScreenGui")
+        ScreenGui.Name = "MehfilSkinChanger"
+        ScreenGui.ResetOnSpawn = false
+        ScreenGui.Parent = CoreGui
+
+        local Main = Instance.new("Frame")
+        Main.Name = "MainFrame"
+        Main.Size = UDim2.new(0, 300, 0, 350)
+        Main.Position = UDim2.new(0.5, -150, 0.5, -175)
+        Main.BackgroundColor3 = currentTheme.bg
+        Main.BorderSizePixel = 0
+        Main.ClipsDescendants = true
+        Main.Parent = ScreenGui
+        addCorners(Main, UDim.new(0, 10))
+        local mainStroke = Instance.new("UIStroke", Main)
+        mainStroke.Color = currentTheme.border
+        mainStroke.Thickness = 1.5
+
+        local Title = Instance.new("TextLabel")
+        Title.Size = UDim2.new(1, -30, 0, 30)
+        Title.Position = UDim2.new(0, 0, 0, 0)
+        Title.BackgroundColor3 = currentTheme.elem
+        Title.Text = "  Skin Changer"
+        Title.TextColor3 = currentTheme.accent
+        Title.Font = Enum.Font.GothamBlack
+        Title.TextSize = 15
+        Title.TextXAlignment = Enum.TextXAlignment.Left
+        Title.BorderSizePixel = 0
+        Title.Parent = Main
+
+        local CloseBtn = Instance.new("TextButton")
+        CloseBtn.Size = UDim2.new(0, 26, 0, 26)
+        CloseBtn.Position = UDim2.new(1, -30, 0, 2)
+        CloseBtn.BackgroundTransparency = 1
+        CloseBtn.Text = "X"
+        CloseBtn.TextColor3 = currentTheme.text
+        CloseBtn.Font = Enum.Font.GothamBold
+        CloseBtn.TextSize = 16
+        CloseBtn.AutoButtonColor = false
+        CloseBtn.Parent = Main
+        CloseBtn.MouseButton1Click:Connect(closeSkinChanger)
+
+        -- Draggable by title
+        Title.Active = true
+        Title.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = true
+                dragStart = input.Position
+                startPos = Main.Position
+            end
+        end)
+        Title.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+        end)
+        UserInputService.InputChanged:Connect(function(input)
+            if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                local delta = input.Position - dragStart
+                Main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            end
+        end)
+
+        -- Weapon list (top half)
+        local WeaponScroll = Instance.new("ScrollingFrame")
+        WeaponScroll.Size = UDim2.new(1, -8, 0.5, -40)
+        WeaponScroll.Position = UDim2.new(0, 4, 0, 34)
+        WeaponScroll.BackgroundTransparency = 1
+        WeaponScroll.ScrollBarThickness = 4
+        WeaponScroll.BorderSizePixel = 0
+        WeaponScroll.Parent = Main
+        local WeaponLayout = Instance.new("UIListLayout", WeaponScroll)
+        WeaponLayout.Padding = UDim.new(0, 4)
+        WeaponLayout.SortOrder = Enum.SortOrder.Name
+
+        -- Skin list (bottom half, initially hidden)
+        local SkinScroll = Instance.new("ScrollingFrame")
+        SkinScroll.Size = UDim2.new(1, -8, 0.5, -70)
+        SkinScroll.Position = UDim2.new(0, 4, 0.5, 0)
+        SkinScroll.BackgroundTransparency = 1
+        SkinScroll.ScrollBarThickness = 4
+        SkinScroll.BorderSizePixel = 0
+        SkinScroll.Visible = false
+        SkinScroll.Parent = Main
+
+        local SkinGrid = Instance.new("UIGridLayout", SkinScroll)
+        SkinGrid.CellSize = UDim2.new(0, 100, 0, 26)
+        SkinGrid.CellPadding = UDim2.new(0, 4, 0, 4)
+
+        local SelectedLabel = Instance.new("TextLabel")
+        SelectedLabel.Size = UDim2.new(1, -8, 0, 20)
+        SelectedLabel.Position = UDim2.new(0, 4, 1, -60)
+        SelectedLabel.BackgroundTransparency = 1
+        SelectedLabel.Text = ""
+        SelectedLabel.TextColor3 = currentTheme.text
+        SelectedLabel.Font = currentFont
+        SelectedLabel.TextSize = 12
+        SelectedLabel.TextXAlignment = Enum.TextXAlignment.Left
+        SelectedLabel.Visible = false
+        SelectedLabel.Parent = Main
+
+        local SaveBtn = Instance.new("TextButton")
+        SaveBtn.Size = UDim2.new(0, 60, 0, 24)
+        SaveBtn.Position = UDim2.new(0, 4, 1, -30)
+        SaveBtn.BackgroundColor3 = currentTheme.accent
+        SaveBtn.TextColor3 = Color3.new(0,0,0)
+        SaveBtn.Font = currentFont
+        SaveBtn.TextSize = 12
+        SaveBtn.Text = "Save"
+        SaveBtn.AutoButtonColor = false
+        SaveBtn.BorderSizePixel = 0
+        SaveBtn.Parent = Main
+        addCorners(SaveBtn, UDim.new(0, 4))
+        SaveBtn.Visible = false
+
+        local LoadBtn = Instance.new("TextButton")
+        LoadBtn.Size = UDim2.new(0, 60, 0, 24)
+        LoadBtn.Position = UDim2.new(0, 70, 1, -30)
+        LoadBtn.BackgroundColor3 = currentTheme.accent
+        LoadBtn.TextColor3 = Color3.new(0,0,0)
+        LoadBtn.Font = currentFont
+        LoadBtn.TextSize = 12
+        LoadBtn.Text = "Load"
+        LoadBtn.AutoButtonColor = false
+        LoadBtn.BorderSizePixel = 0
+        LoadBtn.Parent = Main
+        addCorners(LoadBtn, UDim.new(0, 4))
+        LoadBtn.Visible = false
+
+        SaveBtn.MouseButton1Click:Connect(function()
+            pcall(SaveConfig)
+            Notify("Skin config saved")
+        end)
+        LoadBtn.MouseButton1Click:Connect(function()
+            pcall(LoadConfig)
+            Notify("Skin config loaded")
+        end)
+
+        local function EquipSkin(weapon, skin)
+            _G.EquippedData[weapon].Skin = skin
+            pcall(function() CosmeticLibrary.Equip(weapon, "Skin", skin) end)
+            SelectedLabel.Text = weapon .. " → " .. skin
+        end
+
+        for weapon in pairs(SkinLists) do
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(1, 0, 0, 28)
+            btn.BackgroundColor3 = currentTheme.toggleOff
+            btn.Text = weapon
+            btn.TextColor3 = currentTheme.text
+            btn.Font = currentFont
+            btn.TextSize = 11
+            btn.TextXAlignment = Enum.TextXAlignment.Left
+            btn.AutoButtonColor = false
+            btn.BorderSizePixel = 0
+            btn.Parent = WeaponScroll
+            addCorners(btn, UDim.new(0, 4))
+
+            btn.MouseButton1Click:Connect(function()
+                for _, b in pairs(WeaponScroll:GetChildren()) do
+                    if b:IsA("TextButton") then b.BackgroundColor3 = currentTheme.toggleOff end
+                end
+                btn.BackgroundColor3 = currentTheme.accent
+                btn.TextColor3 = Color3.new(0,0,0)
+
+                -- Clear skin scroll
+                for _, child in pairs(SkinScroll:GetChildren()) do
+                    if child:IsA("TextButton") then child:Destroy() end
+                end
+
+                for _, skin in ipairs(SkinLists[weapon]) do
+                    local sbtn = Instance.new("TextButton")
+                    sbtn.Size = UDim2.new(1, 0, 0, 24)
+                    sbtn.BackgroundColor3 = (_G.EquippedData[weapon].Skin == skin) and Color3.fromRGB(60, 130, 60) or currentTheme.toggleOff
+                    sbtn.Text = skin
+                    sbtn.TextColor3 = currentTheme.text
+                    sbtn.Font = currentFont
+                    sbtn.TextSize = 11
+                    sbtn.AutoButtonColor = false
+                    sbtn.BorderSizePixel = 0
+                    sbtn.Parent = SkinScroll
+                    addCorners(sbtn, UDim.new(0, 4))
+
+                    sbtn.MouseButton1Click:Connect(function()
+                        for _, c in pairs(SkinScroll:GetChildren()) do
+                            if c:IsA("TextButton") then c.BackgroundColor3 = currentTheme.toggleOff end
+                        end
+                        sbtn.BackgroundColor3 = Color3.fromRGB(60, 130, 60)
+                        EquipSkin(weapon, skin)
+                    end)
+                end
+                SkinScroll.Visible = true
+                SelectedLabel.Visible = true
+                SaveBtn.Visible = true
+                LoadBtn.Visible = true
+                SkinScroll.CanvasSize = UDim2.new(0, 0, 0, SkinGrid.AbsoluteContentSize.Y + 10)
+            end)
+        end
+        WeaponScroll.CanvasSize = UDim2.new(0, 0, 0, WeaponLayout.AbsoluteContentSize.Y)
+
+        -- Toggle with K
+        UserInputService.InputBegan:Connect(function(i, g)
+            if not g and i.KeyCode == Enum.KeyCode.K then
+                if Main.Visible then
+                    closeSkinChanger()
+                else
+                    Main.Visible = true
+                    Main.BackgroundTransparency = 0
+                    TweenService:Create(Main, TweenInfo.new(0.2), {BackgroundTransparency = 0}):Play()
+                end
+            end
+        end)
+
+        Notify("Skin Changer loaded! Press K to toggle.")
+    end)
+end
+
+-- ======================================================================
+-- BUILD VOID SPAM UI (with Misc, ESP, Visual tabs)
 -- ======================================================================
 local function setupVoidSpamUI()
     local voidMenu = nil
@@ -1984,24 +2438,99 @@ local function setupVoidSpamUI()
         createESPDropdown(mainScroll, "Crosshair Color", {Name="White", Color=ESP.CrosshairColor}, function(c) ESP.CrosshairColor = c end)
     end
 
+    local function buildMiscControls()
+        clearScroll()
+        local layout = Instance.new("UIListLayout")
+        layout.Padding = UDim.new(0,4)
+        layout.SortOrder = Enum.SortOrder.LayoutOrder
+        layout.Parent = mainScroll
+
+        local backMisc = Instance.new("TextButton")
+        backMisc.Size = UDim2.new(1, -8, 0, 22)
+        backMisc.BackgroundColor3 = currentTheme.accent
+        backMisc.TextColor3 = Color3.new(1,1,1)
+        backMisc.Font = currentFont
+        backMisc.TextSize = 12
+        backMisc.Text = "← Back"
+        backMisc.AutoButtonColor = false
+        backMisc.ZIndex = 10
+        backMisc.Parent = mainScroll
+        addCorners(backMisc, UDim.new(0,4))
+        local backStroke = Instance.new("UIStroke", backMisc)
+        backStroke.Color = currentTheme.border; backStroke.Thickness = 1
+        registerElement(backMisc, "elem"); registerElement(backMisc, "text")
+        backMisc.MouseButton1Click:Connect(buildVoidControls)
+
+        local skinChangerBtn = Instance.new("TextButton")
+        skinChangerBtn.Size = UDim2.new(1, -8, 0, 28)
+        skinChangerBtn.BackgroundColor3 = currentTheme.elem
+        skinChangerBtn.TextColor3 = currentTheme.text
+        skinChangerBtn.Font = currentFont
+        skinChangerBtn.TextSize = 13
+        skinChangerBtn.Text = "Open Skin Changer"
+        skinChangerBtn.AutoButtonColor = false
+        skinChangerBtn.Parent = mainScroll
+        addCorners(skinChangerBtn, UDim.new(0,4))
+        registerElement(skinChangerBtn, "elem"); registerElement(skinChangerBtn, "text")
+        skinChangerBtn.MouseButton1Click:Connect(openSkinChanger)
+    end
+
+    local function buildVisualControls()
+        clearScroll()
+        local layout = Instance.new("UIListLayout")
+        layout.Padding = UDim.new(0,4)
+        layout.SortOrder = Enum.SortOrder.LayoutOrder
+        layout.Parent = mainScroll
+
+        local backVis = Instance.new("TextButton")
+        backVis.Size = UDim2.new(1, -8, 0, 22)
+        backVis.BackgroundColor3 = currentTheme.accent
+        backVis.TextColor3 = Color3.new(1,1,1)
+        backVis.Font = currentFont
+        backVis.TextSize = 12
+        backVis.Text = "← Back"
+        backVis.AutoButtonColor = false
+        backVis.ZIndex = 10
+        backVis.Parent = mainScroll
+        addCorners(backVis, UDim.new(0,4))
+        local backStroke = Instance.new("UIStroke", backVis)
+        backStroke.Color = currentTheme.border; backStroke.Thickness = 1
+        registerElement(backVis, "elem"); registerElement(backVis, "text")
+        backVis.MouseButton1Click:Connect(buildVoidControls)
+
+        local placeholder = Instance.new("TextLabel")
+        placeholder.Size = UDim2.new(1, -8, 0, 40)
+        placeholder.Position = UDim2.new(0, 4, 0, 30)
+        placeholder.BackgroundTransparency = 1
+        placeholder.Text = "Visual features coming soon"
+        placeholder.TextColor3 = currentTheme.text
+        placeholder.Font = currentFont
+        placeholder.TextSize = 13
+        placeholder.TextXAlignment = Enum.TextXAlignment.Center
+        placeholder.Parent = mainScroll
+        registerElement(placeholder, "text")
+    end
+
     buildVoidControls()
 
     local titleBar = voidMenu:FindFirstChild("Frame")
     if titleBar then
         local rightContainer = titleBar:FindFirstChild("Frame")
         if rightContainer then
-            local miscBtn, espBtn = nil, nil
+            local miscBtn, espBtn, visualBtn = nil, nil, nil
             for _, child in ipairs(rightContainer:GetChildren()) do
                 if child:IsA("Frame") then
                     local btn = child:FindFirstChildWhichIsA("ImageButton")
                     if btn then
                         if btn.Name == "MiscBtn" then miscBtn = btn
-                        elseif btn.Name == "EspBtn" then espBtn = btn end
+                        elseif btn.Name == "EspBtn" then espBtn = btn
+                        elseif btn.Name == "VisualBtn" then visualBtn = btn end
                     end
                 end
             end
-            if miscBtn then miscBtn.MouseButton1Click:Connect(function() clearScroll() end) end
+            if miscBtn then miscBtn.MouseButton1Click:Connect(buildMiscControls) end
             if espBtn then espBtn.MouseButton1Click:Connect(buildESPControls) end
+            if visualBtn then visualBtn.MouseButton1Click:Connect(buildVisualControls) end
         end
     end
 
