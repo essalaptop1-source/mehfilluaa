@@ -96,7 +96,34 @@ shared.AutoLoadConfig_Config2 = shared.AutoLoadConfig_Config2 or "None"
 if writefile and makefolder and isfolder then
     if not isfolder("Mehfil Lua") then pcall(makefolder, "Mehfil Lua") end
     if not isfolder("Mehfil Lua/configs") then pcall(makefolder, "Mehfil Lua/configs") end
+    if not isfolder("Mehfil Lua/Lua") then pcall(makefolder, "Mehfil Lua/Lua") end
 end
+
+-- Auto-load external .lua files from "Mehfil Lua/Lua/"
+local function loadExternalLuaFiles()
+    if not isfolder or not listfiles or not readfile then return end
+    local folder = "Mehfil Lua/Lua"
+    if not isfolder(folder) then return end
+    local ok, files = pcall(listfiles, folder)
+    if not ok then return end
+    for _, file in ipairs(files) do
+        if file:match("%.lua$") then
+            local success, code = pcall(readfile, file)
+            if success and code and code ~= "" then
+                local fn, err = loadstring(code)
+                if fn then
+                    local ok2, res = pcall(fn)
+                    if not ok2 then
+                        warn("Failed to execute Lua file: " .. file .. " - " .. tostring(res))
+                    end
+                else
+                    warn("Failed to load Lua file: " .. file .. " - " .. tostring(err))
+                end
+            end
+        end
+    end
+end
+task.spawn(loadExternalLuaFiles)
 
 local function loadFileConfigs()
     if not isfolder or not listfiles or not readfile then return end
@@ -520,7 +547,7 @@ function hideAdminPanel()
     t.Completed:Connect(function() adminMenu.Visible = false end)
 end
 
--- ===== SETTINGS TAB =====
+-- ===== SETTINGS TAB (with JSON paste and refresh) =====
 do
     local settingsMenu = menuInfos[3]
     local scrollFrame = settingsMenu.scroll
@@ -568,6 +595,53 @@ do
     deleteBtn.Font = currentFont; deleteBtn.Text = "Delete Config"; deleteBtn.TextSize = 11; deleteBtn.AutoButtonColor = false; deleteBtn.Visible = false
     deleteBtn.Parent = scrollFrame; addCorners(deleteBtn, UDim.new(0,4))
     registerElement(deleteBtn, "elem"); registerElement(deleteBtn, "text")
+
+    -- Refresh button
+    local refreshBtn = Instance.new("TextButton")
+    refreshBtn.Size = UDim2.new(1, -4, 0, 20); refreshBtn.BackgroundColor3 = currentTheme.elem; refreshBtn.TextColor3 = currentTheme.text
+    refreshBtn.Font = currentFont; refreshBtn.Text = "Refresh Configs"; refreshBtn.TextSize = 11; refreshBtn.AutoButtonColor = false
+    refreshBtn.Parent = scrollFrame; addCorners(refreshBtn, UDim.new(0,4))
+    registerElement(refreshBtn, "elem"); registerElement(refreshBtn, "text")
+    refreshBtn.MouseButton1Click:Connect(function()
+        refreshConfigsDropdown()
+        Notify("Configs refreshed")
+    end)
+
+    -- JSON paste area
+    local jsonNameBox = Instance.new("TextBox")
+    jsonNameBox.Size = UDim2.new(1, -4, 0, 22); jsonNameBox.BackgroundColor3 = currentTheme.elem; jsonNameBox.TextColor3 = currentTheme.text
+    jsonNameBox.Font = currentFont; jsonNameBox.PlaceholderText = "Config name (paste JSON)"; jsonNameBox.Text = ""; jsonNameBox.ClearTextOnFocus = false
+    jsonNameBox.Parent = scrollFrame; addCorners(jsonNameBox, UDim.new(0,4))
+    registerElement(jsonNameBox, "elem"); registerElement(jsonNameBox, "text")
+
+    local jsonContentBox = Instance.new("TextBox")
+    jsonContentBox.Size = UDim2.new(1, -4, 0, 60); jsonContentBox.BackgroundColor3 = currentTheme.elem; jsonContentBox.TextColor3 = currentTheme.text
+    jsonContentBox.Font = currentFont; jsonContentBox.PlaceholderText = "Paste JSON here..."; jsonContentBox.Text = ""; jsonContentBox.ClearTextOnFocus = false
+    jsonContentBox.MultiLine = true
+    jsonContentBox.TextWrapped = true
+    jsonContentBox.TextXAlignment = Enum.TextXAlignment.Left
+    jsonContentBox.TextYAlignment = Enum.TextYAlignment.Top
+    jsonContentBox.Parent = scrollFrame; addCorners(jsonContentBox, UDim.new(0,4))
+    registerElement(jsonContentBox, "elem"); registerElement(jsonContentBox, "text")
+
+    local pasteSaveBtn = Instance.new("TextButton")
+    pasteSaveBtn.Size = UDim2.new(1, -4, 0, 22); pasteSaveBtn.BackgroundColor3 = currentTheme.accent; pasteSaveBtn.TextColor3 = Color3.new(0,0,0)
+    pasteSaveBtn.Font = currentFont; pasteSaveBtn.Text = "Save Pasted Config"; pasteSaveBtn.TextSize = 12; pasteSaveBtn.AutoButtonColor = false
+    pasteSaveBtn.Parent = scrollFrame; addCorners(pasteSaveBtn, UDim.new(0,4))
+    registerElement(pasteSaveBtn, "elem"); registerElement(pasteSaveBtn, "text")
+    pasteSaveBtn.MouseButton1Click:Connect(function()
+        local name = jsonNameBox.Text:gsub("^%s+", ""):gsub("%s+$", "")
+        local jsonStr = jsonContentBox.Text
+        if name == "" then Notify("Enter a name") return end
+        if jsonStr == "" then Notify("Paste JSON first") return end
+        local ok, decoded = pcall(HttpService.JSONDecode, HttpService, jsonStr)
+        if not ok or type(decoded) ~= "table" then Notify("Invalid JSON") return end
+        saveConfigToFile(name, decoded)
+        jsonNameBox.Text = ""
+        jsonContentBox.Text = ""
+        refreshConfigsDropdown()
+        Notify("Config '" .. name .. "' saved from JSON")
+    end)
 
     local selectedConfig = nil
     local deleteConfirm, deleteTimerThread = false, nil
@@ -1797,7 +1871,7 @@ else
 end
 
 -- ======================================================================
--- SKIN CHANGER (themed, smaller, fixed skin display)
+-- SKIN CHANGER (themed, smaller, with wraps, fixed skin display)
 -- ======================================================================
 local function closeSkinChanger()
     local gui = CoreGui:FindFirstChild("MehfilSkinChanger")
@@ -1888,6 +1962,17 @@ local function openSkinChanger()
             ["War Horn"] = {"Default", "Trumpet", "Megaphone", "Air Horn", "Boneclaw Horn", "Mammoth Horn"},
             ["Warpstone"] = {"Default", "Cyber Warpstone", "Teleport Disc", "Electropunk Warpstone", "Warpbone", "Warpstar"},
             ["Permafrost"] = {"Default", "Snowman Permafrost", "Ice Permafrost", "Glorious Permafrost"},
+        }
+        local WrapList = {
+            "None", "Gold", "Diamond", "Midas Touch", "Community Wrap", "Blush Wrapping", "Brain", "Crystalliz",
+            "Damascus", "Black Damascus", ".exe wrap", "Groove", "Hollow Wrap", "Hesper", "Hyperdrive",
+            "Gingerbread", "Neon Lights", "Hologram Arena", "Sunset", "Pink Lemonade", "Lovely Leopard",
+            "Dawn", "Spectral", "Danger", "Termination", "Moonstone", "Starfall", "Black Glass",
+            "Rift Wrap", "Starblaze", "Maganite", "Watermelon", "Reptile", "Water", "OranGG", "A5", "Cheese",
+            "Nova", "Supernova", "Glass", "Mesh", "Meat Wrap", "Black Dark Wrap", "Cardinal", "Pixel Camo",
+            "Nauseite", "Sensite", "Urban Camo", "Frosted", "Slime Wrap", "Carpet Wrap", "Cross Wrap",
+            "Mainframe Wrap", "Honeycomb Wrap", "Black Opal Wrap", "Patriot", "PB&J Wrap", "Digital Camo",
+            "Street Camo", "Ocean Camo", "Circuit", "Clouds", "Woven", "Ladybug"
         }
         local SaveFile = "AnihaSkinConfig.json"
         _G.EquippedData = _G.EquippedData or {}
@@ -1988,8 +2073,8 @@ local function openSkinChanger()
 
         local Main = Instance.new("Frame")
         Main.Name = "MainFrame"
-        Main.Size = UDim2.new(0, 300, 0, 350)
-        Main.Position = UDim2.new(0.5, -150, 0.5, -175)
+        Main.Size = UDim2.new(0, 320, 0, 400)
+        Main.Position = UDim2.new(0.5, -160, 0.5, -200)
         Main.BackgroundColor3 = currentTheme.bg
         Main.BorderSizePixel = 0
         Main.ClipsDescendants = true
@@ -2044,7 +2129,7 @@ local function openSkinChanger()
 
         -- Weapon list (top half)
         local WeaponScroll = Instance.new("ScrollingFrame")
-        WeaponScroll.Size = UDim2.new(1, -8, 0.5, -40)
+        WeaponScroll.Size = UDim2.new(1, -8, 0.4, -40)
         WeaponScroll.Position = UDim2.new(0, 4, 0, 34)
         WeaponScroll.BackgroundTransparency = 1
         WeaponScroll.ScrollBarThickness = 4
@@ -2054,19 +2139,56 @@ local function openSkinChanger()
         WeaponLayout.Padding = UDim.new(0, 4)
         WeaponLayout.SortOrder = Enum.SortOrder.Name
 
-        -- Skin list (bottom half, initially hidden)
+        -- Skin & Wrap container (bottom)
+        local SkinWrapContainer = Instance.new("Frame")
+        SkinWrapContainer.Size = UDim2.new(1, -8, 0.6, -90)
+        SkinWrapContainer.Position = UDim2.new(0, 4, 0.4, 0)
+        SkinWrapContainer.BackgroundTransparency = 1
+        SkinWrapContainer.Visible = false
+        SkinWrapContainer.Parent = Main
+
+        local SkinLabel = Instance.new("TextLabel")
+        SkinLabel.Size = UDim2.new(1, 0, 0, 20)
+        SkinLabel.BackgroundTransparency = 1
+        SkinLabel.Text = "Skins"
+        SkinLabel.TextColor3 = currentTheme.text
+        SkinLabel.Font = currentFont
+        SkinLabel.TextSize = 13
+        SkinLabel.TextXAlignment = Enum.TextXAlignment.Left
+        SkinLabel.Parent = SkinWrapContainer
+
         local SkinScroll = Instance.new("ScrollingFrame")
-        SkinScroll.Size = UDim2.new(1, -8, 0.5, -70)
-        SkinScroll.Position = UDim2.new(0, 4, 0.5, 0)
+        SkinScroll.Size = UDim2.new(1, 0, 0.5, -24)
+        SkinScroll.Position = UDim2.new(0, 0, 0, 24)
         SkinScroll.BackgroundTransparency = 1
         SkinScroll.ScrollBarThickness = 4
         SkinScroll.BorderSizePixel = 0
-        SkinScroll.Visible = false
-        SkinScroll.Parent = Main
-
+        SkinScroll.Parent = SkinWrapContainer
         local SkinGrid = Instance.new("UIGridLayout", SkinScroll)
-        SkinGrid.CellSize = UDim2.new(0, 100, 0, 26)
+        SkinGrid.CellSize = UDim2.new(0, 100, 0, 22)
         SkinGrid.CellPadding = UDim2.new(0, 4, 0, 4)
+
+        local WrapLabel = Instance.new("TextLabel")
+        WrapLabel.Size = UDim2.new(1, 0, 0, 20)
+        WrapLabel.Position = UDim2.new(0, 0, 0.5, 0)
+        WrapLabel.BackgroundTransparency = 1
+        WrapLabel.Text = "Wraps"
+        WrapLabel.TextColor3 = currentTheme.text
+        WrapLabel.Font = currentFont
+        WrapLabel.TextSize = 13
+        WrapLabel.TextXAlignment = Enum.TextXAlignment.Left
+        WrapLabel.Parent = SkinWrapContainer
+
+        local WrapScroll = Instance.new("ScrollingFrame")
+        WrapScroll.Size = UDim2.new(1, 0, 0.5, -24)
+        WrapScroll.Position = UDim2.new(0, 0, 0.5, 24)
+        WrapScroll.BackgroundTransparency = 1
+        WrapScroll.ScrollBarThickness = 4
+        WrapScroll.BorderSizePixel = 0
+        WrapScroll.Parent = SkinWrapContainer
+        local WrapGrid = Instance.new("UIGridLayout", WrapScroll)
+        WrapGrid.CellSize = UDim2.new(0, 100, 0, 22)
+        WrapGrid.CellPadding = UDim2.new(0, 4, 0, 4)
 
         local SelectedLabel = Instance.new("TextLabel")
         SelectedLabel.Size = UDim2.new(1, -8, 0, 20)
@@ -2120,12 +2242,22 @@ local function openSkinChanger()
         local function EquipSkin(weapon, skin)
             _G.EquippedData[weapon].Skin = skin
             pcall(function() CosmeticLibrary.Equip(weapon, "Skin", skin) end)
-            SelectedLabel.Text = weapon .. " → " .. skin
+            SelectedLabel.Text = weapon .. " → Skin: " .. skin
+        end
+
+        local function EquipWrap(weapon, wrap)
+            _G.EquippedData[weapon].Wrap = wrap
+            if wrap == "None" then
+                pcall(function() CosmeticLibrary.Equip(weapon, "Wrap", nil) end)
+            else
+                pcall(function() CosmeticLibrary.Equip(weapon, "Wrap", wrap) end)
+            end
+            SelectedLabel.Text = weapon .. " → Wrap: " .. wrap
         end
 
         for weapon in pairs(SkinLists) do
             local btn = Instance.new("TextButton")
-            btn.Size = UDim2.new(1, 0, 0, 28)
+            btn.Size = UDim2.new(1, 0, 0, 26)
             btn.BackgroundColor3 = currentTheme.toggleOff
             btn.Text = weapon
             btn.TextColor3 = currentTheme.text
@@ -2148,15 +2280,20 @@ local function openSkinChanger()
                 for _, child in pairs(SkinScroll:GetChildren()) do
                     if child:IsA("TextButton") then child:Destroy() end
                 end
+                -- Clear wrap scroll
+                for _, child in pairs(WrapScroll:GetChildren()) do
+                    if child:IsA("TextButton") then child:Destroy() end
+                end
 
+                -- Populate skins
                 for _, skin in ipairs(SkinLists[weapon]) do
                     local sbtn = Instance.new("TextButton")
-                    sbtn.Size = UDim2.new(1, 0, 0, 24)
+                    sbtn.Size = UDim2.new(1, 0, 0, 20)
                     sbtn.BackgroundColor3 = (_G.EquippedData[weapon].Skin == skin) and Color3.fromRGB(60, 130, 60) or currentTheme.toggleOff
                     sbtn.Text = skin
                     sbtn.TextColor3 = currentTheme.text
                     sbtn.Font = currentFont
-                    sbtn.TextSize = 11
+                    sbtn.TextSize = 10
                     sbtn.AutoButtonColor = false
                     sbtn.BorderSizePixel = 0
                     sbtn.Parent = SkinScroll
@@ -2170,11 +2307,36 @@ local function openSkinChanger()
                         EquipSkin(weapon, skin)
                     end)
                 end
-                SkinScroll.Visible = true
+
+                -- Populate wraps
+                for _, wrap in ipairs(WrapList) do
+                    local wbtn = Instance.new("TextButton")
+                    wbtn.Size = UDim2.new(1, 0, 0, 20)
+                    wbtn.BackgroundColor3 = (_G.EquippedData[weapon].Wrap == wrap) and Color3.fromRGB(60, 130, 60) or currentTheme.toggleOff
+                    wbtn.Text = wrap
+                    wbtn.TextColor3 = currentTheme.text
+                    wbtn.Font = currentFont
+                    wbtn.TextSize = 10
+                    wbtn.AutoButtonColor = false
+                    wbtn.BorderSizePixel = 0
+                    wbtn.Parent = WrapScroll
+                    addCorners(wbtn, UDim.new(0, 4))
+
+                    wbtn.MouseButton1Click:Connect(function()
+                        for _, c in pairs(WrapScroll:GetChildren()) do
+                            if c:IsA("TextButton") then c.BackgroundColor3 = currentTheme.toggleOff end
+                        end
+                        wbtn.BackgroundColor3 = Color3.fromRGB(60, 130, 60)
+                        EquipWrap(weapon, wrap)
+                    end)
+                end
+
+                SkinWrapContainer.Visible = true
                 SelectedLabel.Visible = true
                 SaveBtn.Visible = true
                 LoadBtn.Visible = true
                 SkinScroll.CanvasSize = UDim2.new(0, 0, 0, SkinGrid.AbsoluteContentSize.Y + 10)
+                WrapScroll.CanvasSize = UDim2.new(0, 0, 0, WrapGrid.AbsoluteContentSize.Y + 10)
             end)
         end
         WeaponScroll.CanvasSize = UDim2.new(0, 0, 0, WeaponLayout.AbsoluteContentSize.Y)
